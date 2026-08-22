@@ -14,12 +14,15 @@
 # ==============================================================================
 """Tests for the DM Control Suite."""
 
+from unittest import mock
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 from jax import numpy as jp
 
 from mujoco_playground._src import dm_control_suite
+from mujoco_playground._src import mjx_env
 
 
 class TestSuite(parameterized.TestCase):
@@ -36,6 +39,22 @@ class TestSuite(parameterized.TestCase):
     self.assertIsNotNone(state)
     self.assertEqual(state.obs.shape[0], env.observation_size)
     self.assertFalse(jp.isnan(state.data.qpos).any())
+
+  def test_humanoid_nan_state_zeroes_reward(self) -> None:
+    env = dm_control_suite.load(
+        "HumanoidStand", config_overrides={"impl": "jax"}
+    )
+    state = env.reset(jax.random.PRNGKey(42))
+    invalid_data = state.data.replace(
+        qpos=state.data.qpos.at[0].set(jp.nan),
+        xpos=state.data.xpos.at[env.mj_model.body("head").id, -1].set(jp.nan),
+    )
+
+    with mock.patch.object(mjx_env, "step", return_value=invalid_data):
+      state = env.step(state, jp.zeros(env.action_size))
+
+    self.assertEqual(float(state.done), 1.0)
+    self.assertEqual(float(state.reward), 0.0)
 
 
 if __name__ == "__main__":
