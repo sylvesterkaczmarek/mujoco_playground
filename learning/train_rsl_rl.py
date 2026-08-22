@@ -27,6 +27,7 @@ import mediapy as media
 from ml_collections import config_dict
 import mujoco
 from rsl_rl.runners import OnPolicyRunner
+from tensordict import TensorDict
 import torch
 import warp as wp
 
@@ -89,7 +90,7 @@ _CAMERA = flags.DEFINE_string(
     "camera", None, "Camera name to use for rendering."
 )
 _WP_KERNEL_CACHE_DIR = flags.DEFINE_string(
-    "wp_kernel_cache_dir",
+    "warp_kernel_cache_dir",
     "/tmp/wp_kernel_cache_playground",
     "Path to the WP kernel cache directory.",
 )
@@ -118,7 +119,7 @@ def main(argv):
     print(f"Using multi-GPU: local_rank={local_rank}, device={device}")
   else:
     device = _DEVICE.value
-    device_rank = int(device.split(":")[-1]) if "cuda" in device else 0
+    device_rank = int(device.split(":")[-1]) if "cuda" in device else None
 
   # If play-only, use fewer envs
   num_envs = 1 if _PLAY_ONLY.value else _NUM_ENVS.value
@@ -194,9 +195,9 @@ def main(argv):
 
   obs_size = raw_env.observation_size
   if isinstance(obs_size, dict):
-    train_cfg.obs_groups = {"policy": ["state"], "critic": ["privileged_state"]}
+    train_cfg.obs_groups = {"actor": ["state"], "critic": ["privileged_state"]}
   else:
-    train_cfg.obs_groups = {"policy": ["state"], "critic": ["state"]}
+    train_cfg.obs_groups = {"actor": ["state"], "critic": ["state"]}
 
   # Overwrite default config with flags
   train_cfg.seed = _SEED.value
@@ -248,7 +249,8 @@ def main(argv):
 
   for _ in range(env_cfg.episode_length):
     with torch.no_grad():
-      actions = policy({"state": obs_torch})
+      policy_obs = TensorDict({"state": obs_torch}, batch_size=[])
+      actions = policy(policy_obs)
       actions = torch.clip(actions, -1.0, 1.0)  # from wrapper_torch.py
     # Step environment
     state = jit_step(state, wrapper_torch._torch_to_jax(actions.flatten()))
