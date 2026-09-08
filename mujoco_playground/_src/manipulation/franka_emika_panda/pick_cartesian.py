@@ -118,7 +118,7 @@ class PandaPickCubeCartesian(pick.PandaPickCube):
     mj_model.opt.timestep = config.sim_dt
 
     self._mj_model = mj_model
-    self._mjx_model = mjx.put_model(mj_model, impl=self._config.impl)
+    self._mjx_model = mjx_env.put_model(mj_model, impl=self._config.impl)
 
     # Set gripper in sight of camera
     self._post_init(obj_name='box', keyframe='low_home')
